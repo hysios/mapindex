@@ -51,59 +51,67 @@ func setIndexPath(v reflect.Value, selector string, val reflect.Value, opts ...S
 	var (
 		ss   = strings.Split(selector, ".")
 		l    = len(ss)
-		p    reflect.Value
-		m    reflect.Value
+		p    reflect.Value // 父容器
+		c    reflect.Value // 容器
 		pkey reflect.Value
 		pidx int
 		opt  Option
 	)
 
 	setOpts(&opt, opts)
-	m = v
+	c = v
 	for i, s := range ss {
 		idx, num := convInt(s)
 
 		// 最后值
 		if i == l-1 {
-			switch m.Kind() {
+			switch c.Kind() {
 			case reflect.Map:
-				m.SetMapIndex(reflect.ValueOf(s), val)
+				c.SetMapIndex(reflect.ValueOf(s), val)
 				return nil
 			case reflect.Slice:
 				if !num {
-					return errors.New("not a index in slice")
+					pkey = reflect.ValueOf(s)
+					cv := reflect.MakeMap(mapTyp)
+					// p.Index(pidx)
+					cv.SetMapIndex(pkey, val)
+					cm := c.Index(pidx)
+					cm.Set(cv)
+					// c.Set(cv)
+					return nil
+					// return errors.New("not a index in slice")
 				}
 
 				if idx < 0 {
 					switch p.Kind() {
 					case reflect.Map:
-						p.SetMapIndex(pkey, reflect.Append(m, val))
+						p.SetMapIndex(pkey, reflect.Append(c, val))
 					case reflect.Slice:
-						mv := p.Index(pidx)
-						mv.Set(reflect.Append(m, val))
+						cv := p.Index(pidx)
+						cv.Set(reflect.Append(c, val))
 					default:
 						return errors.New("invalid set type")
 					}
 
 					return nil
-				} else if idx > 0 && idx < m.Len() {
-					mv := m.Index(idx)
-					mv.Set(val)
+				} else if idx > 0 && idx < c.Len() {
+					cv := c.Index(idx)
+					cv.Set(val)
 					return nil
 				} else {
 					if opt.AutoExpand && idx < opt.SliceMaxLimit {
-						var mv reflect.Value
-						mv = reflect.MakeSlice(sliceTyp, idx+1, opt.SliceMaxLimit+1)
-						reflect.Copy(mv, m)
-						mvv := mv.Index(idx)
+						var cv reflect.Value
+						cv = reflect.MakeSlice(sliceTyp, idx+1, opt.SliceMaxLimit+1)
+						reflect.Copy(cv, c)
+						mvv := cv.Index(idx)
 						mvv.Set(val)
 
 						switch p.Kind() {
 						case reflect.Map:
-							p.SetMapIndex(pkey, mv)
+							p.SetMapIndex(pkey, cv)
 						case reflect.Slice:
-							mv := p.Index(pidx)
-							mv.Set(mv)
+							cv := p.Index(pidx)
+							cv.Set(cv)
 						default:
 							return errors.New("invalid set type")
 						}
@@ -118,63 +126,75 @@ func setIndexPath(v reflect.Value, selector string, val reflect.Value, opts ...S
 		}
 
 		// 中间值
-		switch m.Kind() {
+		switch c.Kind() {
 		case reflect.Map:
-			p = m
+			p = c
 			pkey = reflect.ValueOf(s)
-			mm := m.MapIndex(pkey)
-			if !mm.IsValid() {
-				var mv reflect.Value
+			cm := c.MapIndex(pkey)
+			if !cm.IsValid() {
+				var cv reflect.Value
 				if _, nnum := convInt(ss[i+1]); nnum {
-					mv = reflect.MakeSlice(sliceTyp, 0, 0)
+					cv = reflect.MakeSlice(sliceTyp, 0, 0)
 				} else {
-					mv = reflect.MakeMap(mapTyp)
+					cv = reflect.MakeMap(mapTyp)
 				}
-				m.SetMapIndex(pkey, mv)
-				m = mv
+				c.SetMapIndex(pkey, cv)
+				c = cv
 			} else {
-				m = mm.Elem()
-				log.Printf("v kind %s", m.Kind())
+				c = cm.Elem()
+				log.Printf("v kind %s", c.Kind())
 			}
 		case reflect.Slice, reflect.Array:
 			if !num {
 				return errors.New("not a index in slice")
 			}
-			if idx >= 0 && idx < m.Len() {
-				p = m
+			if idx >= 0 && idx < c.Len() {
+				p = c
 				pidx = i
-				m = m.Index(idx).Elem()
-				log.Printf("v kind %s", m.Kind())
+				c = c.Index(idx).Elem()
+				log.Printf("v kind %s", c.Kind())
 			} else if idx >= 0 {
 				if opt.AutoExpand && idx < opt.SliceMaxLimit {
-					var mv reflect.Value
-					mv = reflect.MakeSlice(sliceTyp, idx+1, opt.SliceMaxLimit)
-					reflect.Copy(mv, m)
-					p = m
-					m = mv
+					var cv reflect.Value
+					cv = reflect.MakeSlice(sliceTyp, idx+1, opt.SliceMaxLimit)
+					reflect.Copy(cv, c)
+
+					switch p.Kind() {
+					case reflect.Map:
+						p.SetMapIndex(pkey, cv)
+					case reflect.Slice:
+						pcv := p.Index(pidx)
+						pcv.Set(cv)
+					default:
+						return errors.New("invalid set type")
+					}
+					pidx = idx
+					p = c
+					c = cv
 				} else if opt.AutoExpand {
 					return errors.New("out of autoexpend max slice limit")
-				}
-				return errors.New("index out of slice length")
-			} else {
-				var mv reflect.Value
-				if _, nnum := convInt(ss[i+1]); nnum {
-					mv = reflect.MakeSlice(sliceTyp, 0, 0)
 				} else {
-					mv = reflect.MakeMap(mapTyp)
+					return errors.New("index out of slice length")
 				}
-				log.Println("mv", mv, m.Type().Elem())
+			} else {
+				var cv reflect.Value
+				if _, nnum := convInt(ss[i+1]); nnum {
+					cv = reflect.MakeSlice(sliceTyp, 0, 0)
+				} else {
+					cv = reflect.MakeMap(mapTyp)
+				}
+				log.Println("cv", cv, c.Type().Elem())
 				switch p.Kind() {
 				case reflect.Map:
-					p.SetMapIndex(pkey, reflect.Append(m, mv))
+					p.SetMapIndex(pkey, reflect.Append(c, cv))
 				case reflect.Slice:
-					pmv := p.Index(pidx)
-					pmv.Set(reflect.Append(m, mv))
+					pcv := p.Index(pidx)
+					pcv.Set(reflect.Append(c, cv))
 				default:
 					return errors.New("invalid set type")
 				}
-				p = m
-				m = mv
+				p = c
+				c = cv
 			}
 		default:
 			return errors.New("must a slice or map")

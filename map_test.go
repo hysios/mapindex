@@ -189,6 +189,10 @@ func Test_setIndexComplexOutOfSliceIndex(t *testing.T) {
 	err = setIndexPath(v, "friends.4", reflect.ValueOf("bob"), OptSliceMax(1024))
 	assert.NoError(t, err)
 	pp.Print(m)
+
+	err = setIndexPath(v, "friends.5.name", reflect.ValueOf("jim"), OptSliceMax(1024))
+	assert.NoError(t, err)
+	pp.Print(m)
 }
 
 func TestGet(t *testing.T) {
