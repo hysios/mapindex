@@ -186,6 +186,13 @@ func setIndexPath(v reflect.Value, selector string, val reflect.Value, opts ...S
 
 var Nil = reflect.New(interTyp)
 
+func elemval(m reflect.Value) reflect.Value {
+	if m.IsValid() {
+		return m.Elem()
+	}
+	return m
+}
+
 func getIndexPath(v reflect.Value, selector string) (reflect.Value, bool) {
 	v = reflect.Indirect(v)
 
@@ -203,7 +210,7 @@ func getIndexPath(v reflect.Value, selector string) (reflect.Value, bool) {
 			switch m.Kind() {
 			case reflect.Map:
 				pkey = reflect.ValueOf(s)
-				return m.MapIndex(pkey).Elem(), true
+				return elemval(m.MapIndex(pkey)), true
 			case reflect.Slice, reflect.Array:
 				if !num {
 					log.Printf("invalid index type of slice or array")
@@ -211,7 +218,7 @@ func getIndexPath(v reflect.Value, selector string) (reflect.Value, bool) {
 				}
 
 				if idx >= 0 && idx < m.Len() {
-					return m.Index(idx).Elem(), true
+					return elemval(m.Index(idx)), true
 				} else if idx >= 0 {
 					log.Printf("index out of slice length")
 					return Nil, false
