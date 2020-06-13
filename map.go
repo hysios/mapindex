@@ -266,8 +266,11 @@ func Set(m interface{}, selector string, val interface{}, opts ...SetOptFunc) er
 func Get(m interface{}, selector string) interface{} {
 	v := reflect.ValueOf(m)
 	if val, ok := getIndexPath(v, selector); ok {
-
-		return val.Interface()
+		if val.IsValid() {
+			return val.Interface()
+		} else {
+			return val
+		}
 	}
 	return nil
 }
