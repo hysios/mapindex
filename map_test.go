@@ -190,3 +190,98 @@ func Test_setIndexComplexOutOfSliceIndex(t *testing.T) {
 	assert.NoError(t, err)
 	pp.Print(m)
 }
+
+func TestGet(t *testing.T) {
+	var m = map[string]interface{}{
+		"name": map[string]interface{}{
+			"first": "Tom",
+			"last":  "Smith",
+		},
+		"company": map[string]interface{}{
+			"name": "pdls",
+			"locations": []interface{}{
+				map[string]interface{}{
+					"name":    "headquarter",
+					"default": true,
+					"road1":   "麓谷企业广场",
+					"members": []interface{}{
+						map[string]interface{}{
+							"username": "elle",
+							"salary":   1000,
+							"years":    3,
+						},
+						map[string]interface{}{
+							"username": "jon",
+							"salary":   1500.0,
+							"years":    2,
+						},
+					},
+				},
+				map[string]interface{}{
+					"name":    "subpart",
+					"default": false,
+					"road1":   "河东",
+				},
+			},
+		},
+		"friends": []interface{}{"bob", "tom"},
+	}
+	type args struct {
+		m        interface{}
+		selector string
+	}
+	tests := []struct {
+		name string
+		args args
+		want interface{}
+	}{
+		{
+			args: args{
+				m:        m,
+				selector: "name",
+			},
+			want: map[string]interface{}{
+				"first": "Tom",
+				"last":  "Smith",
+			},
+		},
+
+		{
+			args: args{
+				m:        m,
+				selector: "company.locations.0.name",
+			},
+			want: "headquarter",
+		},
+
+		{
+			args: args{
+				m:        m,
+				selector: "company.locations.1.name",
+			},
+			want: "subpart",
+		},
+
+		{
+			args: args{
+				m:        m,
+				selector: "company.locations.1.default",
+			},
+			want: false,
+		},
+		{
+			args: args{
+				m:        m,
+				selector: "company.locations.3.default",
+			},
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Get(tt.args.m, tt.args.selector); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Get() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
