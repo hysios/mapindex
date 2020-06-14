@@ -289,3 +289,20 @@ func TestGet(t *testing.T) {
 		})
 	}
 }
+
+func Test_setIndexPathEmpty(t *testing.T) {
+	var m = map[string]interface{}{}
+	v := reflect.ValueOf(&m)
+
+	err := setIndexPath(v, "platePic.mediaType", reflect.ValueOf("image/jpeg"))
+	assert.NoError(t, err)
+	pp.Println(m)
+
+	err = setIndexPath(v, "platePic.size", reflect.ValueOf(123456))
+	assert.NoError(t, err)
+	pp.Println(m)
+
+	err = setIndexPath(v, "platePic.data", reflect.ValueOf("hello world"))
+	assert.NoError(t, err)
+	pp.Println(m)
+}
