@@ -289,7 +289,7 @@ func Get(m interface{}, selector string) interface{} {
 		if val.IsValid() {
 			return val.Interface()
 		} else {
-			return val
+			return nil
 		}
 	}
 	return nil
