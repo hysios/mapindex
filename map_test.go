@@ -36,6 +36,11 @@ func Test_getIndexPath(t *testing.T) {
 	assert.Equal(t, ok, true)
 	assert.Equal(t, vv.Interface(), "tom")
 	log.Print(vv)
+
+	vv, ok = getIndexPath(v, "test")
+	assert.False(t, ok)
+	assert.Zero(t, vv)
+	log.Print(vv)
 }
 
 func Test_getIndexPathSlice(t *testing.T) {

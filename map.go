@@ -230,7 +230,11 @@ func getIndexPath(v reflect.Value, selector string) (reflect.Value, bool) {
 			switch m.Kind() {
 			case reflect.Map:
 				pkey = reflect.ValueOf(s)
-				return elemval(m.MapIndex(pkey)), true
+				mv := m.MapIndex(pkey)
+				if mv.IsValid() {
+					return elemval(mv), true
+				}
+				return mv, false
 			case reflect.Slice, reflect.Array:
 				if !num {
 					log.Printf("invalid index type of slice or array")
@@ -255,7 +259,11 @@ func getIndexPath(v reflect.Value, selector string) (reflect.Value, bool) {
 		case reflect.Map:
 			pkey = reflect.ValueOf(s)
 			mm := m.MapIndex(pkey)
-			m = mm.Elem()
+			if mm.IsValid() {
+				m = elemval(mm)
+			} else {
+				return mm, false
+			}
 		case reflect.Slice, reflect.Array:
 			if !num {
 				log.Printf("invalid index type of slice or array")
