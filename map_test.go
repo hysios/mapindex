@@ -178,6 +178,14 @@ func Test_setIndexComplex(t *testing.T) {
 	err = setIndexPath(v, "company.locations.0.memmbers.username", reflect.ValueOf("zhang"))
 	assert.NoError(t, err)
 	pp.Print(m)
+
+	err = setIndexPath(v, "company.name.memmbers", reflect.ValueOf("zhang"), OptOverwrite())
+	assert.NoError(t, err)
+	pp.Print(m)
+
+	err = setIndexPath(v, "company.name.0", reflect.ValueOf("zhang"), OptOverwrite())
+	assert.NoError(t, err)
+	pp.Print(m)
 }
 
 func Test_setIndexComplexOutOfSliceIndex(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 type Option struct {
 	SliceMaxLimit int
 	AutoExpand    bool
+	Overwrite     bool
 }
 
 type SetOptFunc func(opts *Option)
@@ -36,6 +37,12 @@ func OptSliceMax(n int) SetOptFunc {
 			opts.AutoExpand = true
 		}
 		opts.SliceMaxLimit = n
+	}
+}
+
+func OptOverwrite() SetOptFunc {
+	return func(opts *Option) {
+		opts.Overwrite = true
 	}
 }
 
@@ -121,7 +128,14 @@ func setIndexPath(v reflect.Value, selector string, val reflect.Value, opts ...S
 					}
 				}
 			default:
-				return errors.New("must a slice or map")
+				if !opt.Overwrite {
+					return errors.New("must a slice or map")
+				}
+
+				c = reflect.MakeMap(mapTyp)
+				p.SetMapIndex(pkey, c)
+				c.SetMapIndex(reflect.ValueOf(s), val)
+				return nil
 			}
 		}
 
