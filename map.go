@@ -355,7 +355,7 @@ func deepSearch(v interface{}, p interface{}, pk interface{}, paths []string) in
 	paths = paths[1:]
 	switch x := v.(type) {
 	case map[string]interface{}:
-		ak, idx, ok := isIndex(k)
+		ak, idxs, ok := isIndex(k)
 		if !ok {
 			m, ok := x[k]
 			if !ok {
@@ -366,29 +366,103 @@ func deepSearch(v interface{}, p interface{}, pk interface{}, paths []string) in
 		} else {
 			m, ok := x[ak]
 			if !ok {
-				l := idx[0] + 1
-				m = makeSlice(len(idx), l, l)
-				x[ak] = m
-				return deepSearch(m, x, idx[0], paths)
+				var (
+					ll     = len(idxs) - 1
+					i, idx int
+					a      []interface{}
+					pidx   int
+					p      interface{}
+				)
+				// m = makeSlice(len(idxs), l, l)
+
+				// x[ak] = m
+				for i, idx = range idxs {
+					ca := make([]interface{}, idx+1)
+					if i < ll {
+						if i == 0 {
+							x[ak] = ca
+						} else {
+							a[pidx] = ca
+						}
+						pidx = idx
+						a = ca
+					} else {
+						if i == 0 {
+							x[ak] = ca
+							p = x
+						} else {
+							a[pidx] = ca
+							p = a
+						}
+						a = ca
+					}
+				}
+				return deepSearch(a, p, idx, paths)
 			} else {
 				if a, ok := m.([]interface{}); !ok {
-					l := idx[0] + 1
-					m = makeSlice(len(idx), l, l)
+					l := idxs[0] + 1
+					m = makeSlice(len(idxs), l, l)
 					x[ak] = m
-					return deepSearch(m, x, idx[0], paths)
+					return deepSearch(m, x, idxs[0], paths)
 				} else {
-					if idx[0] < len(a) {
-						// m = make(map[string]interface{})
-						// a[idx[0]] = m
-						// x[ak] = a
-						return deepSearch(m, x, idx[0], paths)
-					} else {
-						l := idx[0] + 1
-						m = makeSlice(len(idx), l, l)
-						copy(m.([]interface{}), a)
-						x[ak] = m
-						return deepSearch(m, x, idx[0], paths)
+					var (
+						i, idx int
+						ll     = len(idxs) - 1
+						pa     = a
+						pidx   int
+					)
+
+					for i, idx = range idxs {
+						if i < ll {
+							if idx < len(a) {
+								ca, ok := a[idx].([]interface{})
+								if !ok {
+									ca = make([]interface{}, idx+1)
+									a[idx] = ca
+								}
+								pidx = idx
+								pa = a
+								a = ca
+
+								// m = make(map[string]interface{})
+								// a[idx[0]] = m
+								// x[ak] = a
+								// return deepSearch(m, x, idx, paths)
+							} else {
+								l := idx + 1
+								ca := make([]interface{}, l)
+								copy(ca, a)
+								if i == 0 {
+									x[ak] = ca
+								} else {
+									a[idx] = ca
+								}
+								pidx = idx
+								pa = a
+								a = ca
+								// m = makeSlice(len(idxs), l, l)
+								// copy(m.([]interface{}), a)
+								// x[ak] = m
+								// return deepSearch(m, x, idx, paths)
+							}
+						} else {
+							if idx >= len(a) {
+								l := idx + 1
+								ca := make([]interface{}, l)
+								copy(ca, a)
+								if i == 0 {
+									x[ak] = ca
+								} else {
+									pa[pidx] = ca
+									// a[idx] = ca
+								}
+								pa = a
+								a = ca
+							}
+						}
 					}
+
+					return deepSearch(a, pa, idx, paths)
 				}
 			}
 		}

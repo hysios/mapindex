@@ -452,9 +452,18 @@ func Test_deepSearch(t *testing.T) {
 
 	c = deepSearch(m, nil, nil, []string{"b", "e", "c[1][2]"})
 	if v, ok := c.([]interface{}); ok {
-		v[2] = 123
+		v[2] = 789
 	}
-	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"b", "e", "c[1][2]"}), 789)
+	print(t, m)
+	c = deepSearch(m, nil, nil, []string{"h", "g", "d", "e", "c[1][2][4]"})
+	if v, ok := c.([]interface{}); ok {
+		v[4] = 123
+	}
+	assert.Equal(t, searchMap(m, []string{"h", "g", "d", "e", "c[1][2][4]"}), 123)
+
+	print(t, m)
+	// t.Log(m)
 
 	// print(t, m)
 }
