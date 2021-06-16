@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/kr/pretty"
 	"github.com/stretchr/testify/assert"
 	"github.com/yudai/pp"
 )
@@ -91,6 +92,26 @@ func Test_getIndexPathSlice(t *testing.T) {
 
 }
 
+func assertMapValue(t *testing.T, contains, m map[string]interface{}) bool {
+	for key, val := range m {
+		if v, ok := contains[key]; ok {
+			switch mv := v.(type) {
+			case map[string]interface{}:
+				assertMapValue(t, mv, val.(map[string]interface{}))
+			default:
+				if mv == val {
+					return true
+				}
+
+				t.Fatalf("not continas key: %s => val: %v", key, val)
+				return false
+			}
+		}
+	}
+
+	return false
+}
+
 func Test_setIndexPath(t *testing.T) {
 	var m = map[string]interface{}{
 		"name":    map[string]interface{}{"first": "Tom", "last": "Smith"},
@@ -109,9 +130,19 @@ func Test_setIndexPath(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, m["friends"], 3)
 
-	err = setIndexPath(v, "friends.-1", reflect.ValueOf("scarlet"))
+	err = setIndexPath(v, "friends.-1", reflect.ValueOf("scarlet"), OptOverwrite())
 	assert.NoError(t, err)
 	assert.Len(t, m["friends"], 4)
+
+	err = setIndexPath(v, "friends.test.key", reflect.ValueOf("scarlet"), OptOverwrite())
+	assert.NoError(t, err)
+	assertMapValue(t, m, map[string]interface{}{"test": map[string]interface{}{"key": "scarlet"}})
+
+	err = setIndexPath(v, "friends", reflect.ValueOf("scarlet"), OptOverwrite())
+	assert.NoError(t, err)
+	assert.Equal(t, m["friends"], "scarlet")
+
+	err = setIndexPath(v, "name.object.age", reflect.ValueOf(1), OptOverwrite())
 }
 
 func Test_setIndexComplex(t *testing.T) {
@@ -150,42 +181,47 @@ func Test_setIndexComplex(t *testing.T) {
 		"friends": []interface{}{"bob", "tom"},
 	}
 
-	v := reflect.ValueOf(&m)
-	err := setIndexPath(v, "company.name", reflect.ValueOf("bob"))
+	err := Set(m, "company.name", "bob")
 	assert.NoError(t, err)
 	assert.Equal(t, Get(m, "company.name"), "bob")
 
-	err = setIndexPath(v, "company.locations.0.default", reflect.ValueOf(false))
+	v := reflect.ValueOf(&m)
+	err = Set(m, "company.locations[0].default", false)
 	assert.NoError(t, err)
-	pp.Print(m["company"])
+	// assert.Equal(t, Get(m, "company.locations[0].default"), false)
+	print(t, m)
 
 	// add field
 	err = setIndexPath(v, "company.locations.0.road2", reflect.ValueOf("C1 栋 702"))
 	assert.NoError(t, err)
-	pp.Print(m)
+	print(t, m)
 
 	err = setIndexPath(v, "company.locations.-1.name", reflect.ValueOf("C1 栋 702"))
 	assert.NoError(t, err)
-	pp.Print(m)
+	print(t, m)
 
 	err = setIndexPath(v, "company.locations.-1.name", reflect.ValueOf("C1 栋 702"))
 	assert.NoError(t, err)
-	pp.Print(m)
+	print(t, m)
 
 	err = setIndexPath(v, "company.locations.0.medmbers.-1.username", reflect.ValueOf("zhang"))
 	assert.NoError(t, err)
 
 	err = setIndexPath(v, "company.locations.0.memmbers.username", reflect.ValueOf("zhang"))
 	assert.NoError(t, err)
-	pp.Print(m)
+	print(t, m)
 
 	err = setIndexPath(v, "company.name.memmbers", reflect.ValueOf("zhang"), OptOverwrite())
 	assert.NoError(t, err)
-	pp.Print(m)
+	print(t, m)
 
 	err = setIndexPath(v, "company.name.0", reflect.ValueOf("zhang"), OptOverwrite())
 	assert.NoError(t, err)
-	pp.Print(m)
+	print(t, m)
+
+	err = setIndexPath(v, "friends.-1", reflect.ValueOf("zhang"), OptOverwrite())
+	assert.NoError(t, err)
+	print(t, m)
 }
 
 func Test_setIndexComplexOutOfSliceIndex(t *testing.T) {
@@ -318,4 +354,96 @@ func Test_setIndexPathEmpty(t *testing.T) {
 	err = setIndexPath(v, "platePic.data", reflect.ValueOf("hello world"))
 	assert.NoError(t, err)
 	pp.Println(m)
+}
+
+func Test_Set(t *testing.T) {
+	var m = map[string]interface{}{}
+	Set(m, "a.b.c", true)
+	print(t, m)
+
+	Set(m, "a.b", true)
+	print(t, m)
+
+	Set(m, "a.e[1]", 123)
+	print(t, m)
+
+	Set(m, "a.e[3]", false)
+	print(t, m)
+
+	Set(m, "a.e[4].c", true)
+	print(t, m)
+}
+
+func Test_deepSearch(t *testing.T) {
+	var (
+		m = map[string]interface{}{}
+		c = deepSearch(m, nil, nil, []string{"a", "b", "c"})
+	)
+	if v, ok := c.(map[string]interface{}); ok {
+		v["d"] = true
+	}
+	t.Log(m)
+
+	c = deepSearch(m, nil, nil, []string{"a", "b"})
+	if v, ok := c.(map[string]interface{}); ok {
+		v["e"] = true
+	}
+
+	t.Log(m)
+
+	c = deepSearch(m, nil, nil, []string{"a"})
+	if v, ok := c.(map[string]interface{}); ok {
+		v["f"] = true
+	}
+
+	t.Log(m)
+
+	c = deepSearch(m, nil, nil, []string{"a", "e[1]"})
+	if v, ok := c.([]interface{}); ok {
+		v[1] = true
+		_ = v
+	}
+
+	t.Log(m)
+
+	c = deepSearch(m, nil, nil, []string{"a", "e[4]"})
+	if v, ok := c.([]interface{}); ok {
+		v[4] = false
+	}
+
+	t.Log(m)
+
+	c = deepSearch(m, nil, nil, []string{"a", "e[3]", "c"})
+	if v, ok := c.(map[string]interface{}); ok {
+		v["d"] = 1
+	}
+	t.Log(m)
+
+	c = deepSearch(m, nil, nil, []string{"b", "e[2]", "c"})
+	if v, ok := c.(map[string]interface{}); ok {
+		v["d"] = 1
+	}
+	print(t, m)
+
+	c = deepSearch(m, nil, nil, []string{"b", "e", "c"})
+	if v, ok := c.(map[string]interface{}); ok {
+		v["d"] = 2
+	}
+	print(t, m)
+
+	c = deepSearch(m, nil, nil, []string{"b", "e", "c[1]"})
+	if v, ok := c.([]interface{}); ok {
+		v[1] = 123
+	}
+	print(t, m)
+
+	// c = deepSearch(m, nil, nil, []string{"b", "e", "c[1][2]"})
+	// if v, ok := c.([]interface{}); ok {
+	// 	v[1] = 123
+	// }
+	// print(t, m)
+}
+
+func print(t *testing.T, val interface{}) {
+	t.Logf("% #v", pretty.Formatter(val))
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -153,20 +154,25 @@ func setIndexPath(v reflect.Value, selector string, val reflect.Value, opts ...S
 					cv = reflect.MakeMap(mapTyp)
 				}
 				c.SetMapIndex(pkey, cv)
-				c = cv
+				c = c.MapIndex(pkey).Elem()
+				// c = cv
 			} else {
 				c = cm.Elem()
-				log.Printf("v kind %s", c.Kind())
 			}
 		case reflect.Slice, reflect.Array:
 			if !num {
-				return errors.New("not a index in slice")
+				if !opt.Overwrite {
+					return errors.New("not a index in slice")
+				}
+				c = reflect.MakeMap(mapTyp)
+				p.SetMapIndex(pkey, c)
+				c.SetMapIndex(reflect.ValueOf(s), val)
+				return nil
 			}
 			if idx >= 0 && idx < c.Len() {
 				p = c
 				pidx = i
 				c = c.Index(idx).Elem()
-				log.Printf("v kind %s", c.Kind())
 			} else if idx >= 0 {
 				if opt.AutoExpand && idx < opt.SliceMaxLimit {
 					var cv reflect.Value
@@ -218,6 +224,210 @@ func setIndexPath(v reflect.Value, selector string, val reflect.Value, opts ...S
 	return nil
 }
 
+func searchMap(source map[string]interface{}, path []string) interface{} {
+	if len(path) == 0 {
+		return source
+	}
+
+	next, ok := source[path[0]]
+	if ok {
+		// Fast path
+		if len(path) == 1 {
+			return next
+		}
+
+		// Nested case
+		switch next.(type) {
+		case map[interface{}]interface{}:
+			return searchMap(ToStringMap(next), path[1:])
+		case map[string]interface{}:
+			// Type assertion is safe here since it is only reached
+			// if the type of `next` is the same as the type being asserted
+			return searchMap(next.(map[string]interface{}), path[1:])
+		default:
+			// got a value but nested key expected, return "nil" for not found
+			return nil
+		}
+	}
+	return nil
+}
+
+func isNum(s string) (int, bool) {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, false
+	}
+	return i, true
+}
+
+var regIdxes = regexp.MustCompile(`(\w+)((\[\w+\])*)+`)
+
+func isIndex(s string) (k string, idx []int, ok bool) {
+	result := regIdxes.FindAllStringSubmatch(s, -1)
+	if len(result) == 0 {
+		return s, nil, false
+	}
+	row := result[0]
+	if row[3] == "" {
+		return s, nil, false
+	}
+	ok = len(row) == 4
+	k = row[1]
+
+	f := func(c rune) bool {
+		return c == '[' || c == ']'
+	}
+
+	ss := strings.FieldsFunc(row[2], f)
+
+	idx = make([]int, len(ss))
+	for j, s := range ss {
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			continue
+		}
+		idx[j] = i
+	}
+	return
+}
+
+func makeSlice(multi int, len, cap int) interface{} {
+	switch multi {
+	case 0:
+		return nil
+	case 1:
+		return make([]interface{}, len, cap)
+	case 2:
+		return make([][]interface{}, len, cap)
+	case 3:
+		return make([][][]interface{}, len, cap)
+	case 4:
+		return make([][][][]interface{}, len, cap)
+	case 5:
+		return make([][][][][]interface{}, len, cap)
+	default:
+		panic("out of 5 dim")
+	}
+}
+
+func deepSearch(v interface{}, p interface{}, pk interface{}, paths []string) interface{} {
+	if len(paths) == 0 {
+		return v
+	}
+
+	var k = paths[0]
+
+	paths = paths[1:]
+	switch x := v.(type) {
+	case map[string]interface{}:
+		ak, idx, ok := isIndex(k)
+		if !ok {
+			m, ok := x[k]
+			if !ok {
+				m = make(map[string]interface{})
+				x[k] = m
+			}
+			return deepSearch(m, x, k, paths)
+		} else {
+			m, ok := x[ak]
+			if !ok {
+				l := idx[0] + 1
+				m = makeSlice(len(idx), l, l)
+				x[ak] = m
+				return deepSearch(m, x, idx[0], paths)
+			} else {
+				if a, ok := m.([]interface{}); !ok {
+					l := idx[0] + 1
+					m = makeSlice(len(idx), l, l)
+					x[ak] = m
+				} else {
+					if idx[0] < len(a) {
+						// m = make(map[string]interface{})
+						// a[idx[0]] = m
+						// x[ak] = a
+						return deepSearch(m, x, idx[0], paths)
+					} else {
+						l := idx[0] + 1
+						m = makeSlice(len(idx), l, l)
+						copy(m.([]interface{}), a)
+						x[ak] = m
+						return deepSearch(m, x, idx[0], paths)
+					}
+				}
+			}
+			return deepSearch(m, x, ak, paths)
+		}
+	case []interface{}:
+		switch pkx := pk.(type) {
+		case string:
+			mx := make(map[string]interface{})
+			if mv, ok := p.(map[string]interface{}); ok {
+				mv[pkx] = mx
+				if m, ok := mx[k]; ok {
+					return deepSearch(m, mx, k, paths)
+				} else {
+					m = make(map[string]interface{})
+					mx[k] = m
+					return deepSearch(m, mx, k, paths)
+				}
+			}
+		case int:
+			v := x[pkx]
+			switch mx := v.(type) {
+			case map[string]interface{}:
+				if m, ok := mx[k]; ok {
+					return deepSearch(m, mx, k, paths)
+				} else {
+					m = make(map[string]interface{})
+					mx[k] = m
+					return deepSearch(m, mx, k, paths)
+				}
+			default:
+				var mv = make(map[string]interface{})
+				x[pkx] = mv
+				m := make(map[string]interface{})
+				mv[k] = m
+				return deepSearch(m, mv, k, paths)
+			}
+		}
+		// default:
+		// 	switch pp := p.(type) {
+		// 	case map[string]interface{}:
+		// 		if pkk, ok := pk.(string); ok {
+		// 			x := make(map[string]interface{})
+		// 			pp[pkk] = x
+		// 			m := make(map[string]interface{})
+		// 			x[k] = m
+		// 			deepSearch(m, x, k, paths)
+		// 		}
+		// 	case []interface{}:
+		// 		if pkk, ok := pk.(int); ok {
+		// 			if i, ok := isNum(k); ok {
+		// 				x := make([]interface{}, 0)
+		// 				pp[pkk] = x
+		// 				m := make(map[string]interface{})
+		// 				if i < len(x) {
+		// 					x[i] = m
+		// 				} else {
+		// 					x = make([]interface{}, i+1)
+		// 					x[i] = m
+		// 				}
+		// 				deepSearch(m, x, i, paths)
+		// 			} else {
+		// 				x := make(map[string]interface{})
+		// 				pp[pkk] = x
+		// 				m := make(map[string]interface{})
+		// 				x[k] = m
+		// 				deepSearch(m, x, k, paths)
+		// 			}
+		// 		}
+		// 	default:
+		// 		return p
+		// 	}
+	}
+	return v
+}
+
 var Nil = reflect.New(interTyp)
 
 func elemval(m reflect.Value) reflect.Value {
@@ -241,6 +451,8 @@ func getIndexPath(v reflect.Value, selector string) (reflect.Value, bool) {
 		idx, num := convInt(s)
 
 		if i == l-1 {
+			m = reflect.Indirect(m)
+
 			switch m.Kind() {
 			case reflect.Map:
 				pkey = reflect.ValueOf(s)
@@ -268,6 +480,7 @@ func getIndexPath(v reflect.Value, selector string) (reflect.Value, bool) {
 				return Nil, false
 			}
 		}
+		m = reflect.Indirect(m)
 
 		switch m.Kind() {
 		case reflect.Map:
@@ -300,9 +513,41 @@ func getIndexPath(v reflect.Value, selector string) (reflect.Value, bool) {
 	return Nil, false
 }
 
-func Set(m interface{}, selector string, val interface{}, opts ...SetOptFunc) error {
-	v := reflect.ValueOf(m)
-	return setIndexPath(v, selector, reflect.ValueOf(val), opts...)
+func Set(v interface{}, selector string, val interface{}, opts ...SetOptFunc) error {
+	var (
+		m, ok = v.(map[string]interface{})
+		paths = strings.Split(selector, ".")
+	)
+	if !ok {
+		return errors.New("invalid map type")
+	}
+	// mv := deepSearch(m, paths[:len(paths)-1])
+	lastKey := strings.ToLower(paths[len(paths)-1])
+	_, idx, lastSlice := isIndex(lastKey)
+	if !lastSlice {
+		paths = paths[:len(paths)-1]
+	}
+	mv := deepSearch(m, nil, nil, paths)
+
+	switch x := mv.(type) {
+	case map[string]interface{}:
+		x[lastKey] = val
+	case []interface{}:
+		if lastSlice {
+			x[idx[0]] = val
+		} else {
+			_, idx, _ = isIndex(paths[len(paths)-1])
+			mv, ok := x[idx[0]].(map[string]interface{})
+			if !ok {
+				mv = make(map[string]interface{})
+				x[idx[0]] = mv
+			}
+			mv[lastKey] = val
+		}
+	}
+	// mv[lastKey] = val
+
+	return nil
 }
 
 func Get(m interface{}, selector string) interface{} {
