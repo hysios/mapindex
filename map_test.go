@@ -383,64 +383,79 @@ func Test_deepSearch(t *testing.T) {
 		v["d"] = true
 	}
 	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"a", "b", "c", "d"}), true)
 
 	c = deepSearch(m, nil, nil, []string{"a", "b"})
 	if v, ok := c.(map[string]interface{}); ok {
 		v["e"] = true
 	}
-
 	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"a", "b", "e"}), true)
 
 	c = deepSearch(m, nil, nil, []string{"a"})
 	if v, ok := c.(map[string]interface{}); ok {
 		v["f"] = true
 	}
-
 	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"a", "f"}), true)
 
 	c = deepSearch(m, nil, nil, []string{"a", "e[1]"})
 	if v, ok := c.([]interface{}); ok {
 		v[1] = true
 		_ = v
 	}
-
 	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"a", "e[1]"}), true)
 
 	c = deepSearch(m, nil, nil, []string{"a", "e[4]"})
 	if v, ok := c.([]interface{}); ok {
 		v[4] = false
 	}
-
 	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"a", "e[4]"}), false)
 
 	c = deepSearch(m, nil, nil, []string{"a", "e[3]", "c"})
 	if v, ok := c.(map[string]interface{}); ok {
 		v["d"] = 1
 	}
 	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"a", "e[3]", "c", "d"}), 1)
 
 	c = deepSearch(m, nil, nil, []string{"b", "e[2]", "c"})
 	if v, ok := c.(map[string]interface{}); ok {
 		v["d"] = 1
 	}
-	print(t, m)
+	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"b", "e[2]", "c", "d"}), 1)
 
 	c = deepSearch(m, nil, nil, []string{"b", "e", "c"})
 	if v, ok := c.(map[string]interface{}); ok {
 		v["d"] = 2
 	}
-	print(t, m)
+	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"b", "e", "c", "d"}), 2)
 
 	c = deepSearch(m, nil, nil, []string{"b", "e", "c[1]"})
 	if v, ok := c.([]interface{}); ok {
 		v[1] = 123
 	}
-	print(t, m)
+	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"b", "e", "c[1]"}), 123)
 
-	// c = deepSearch(m, nil, nil, []string{"b", "e", "c[1][2]"})
-	// if v, ok := c.([]interface{}); ok {
-	// 	v[1] = 123
-	// }
+	c = deepSearch(m, nil, nil, []string{"a", "b", "c[1]", "d", "f[2]"})
+	if v, ok := c.([]interface{}); ok {
+		v[2] = 456
+	}
+	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"a", "b", "c[1]", "d", "f[2]"}), 456)
+	// print(t, m)
+
+	c = deepSearch(m, nil, nil, []string{"b", "e", "c[1][2]"})
+	if v, ok := c.([]interface{}); ok {
+		v[2] = 123
+	}
+	t.Log(m)
+
 	// print(t, m)
 }
 

@@ -229,21 +229,56 @@ func searchMap(source map[string]interface{}, path []string) interface{} {
 		return source
 	}
 
-	next, ok := source[path[0]]
+	var (
+		k, idxs, isSlice = isIndex(path[0])
+	)
+
+	if !isSlice {
+		k = path[0]
+	}
+
+	next, ok := source[k]
 	if ok {
 		// Fast path
-		if len(path) == 1 {
+		if !isSlice && len(path) == 1 {
 			return next
 		}
 
 		// Nested case
-		switch next.(type) {
-		case map[interface{}]interface{}:
-			return searchMap(ToStringMap(next), path[1:])
+		switch x := next.(type) {
+		// case map[interface{}]interface{}:
+		// 	return searchMap(ToStringMap(next), path[1:])
 		case map[string]interface{}:
 			// Type assertion is safe here since it is only reached
 			// if the type of `next` is the same as the type being asserted
-			return searchMap(next.(map[string]interface{}), path[1:])
+			return searchMap(x, path[1:])
+		case []interface{}:
+			if !isSlice {
+				return nil
+			}
+			var (
+				l = len(idxs) - 1
+				m map[string]interface{}
+			)
+			for i, idx := range idxs {
+				if i < l {
+					nx, ok := x[idx].([]interface{})
+					if !ok {
+						return nil
+					}
+					x = nx
+				} else {
+					m, ok = x[idx].(map[string]interface{})
+					if !ok {
+						if len(path) > 1 {
+							return nil
+						} else {
+							return x[idx]
+						}
+					}
+				}
+			}
+			return searchMap(m, path[1:])
 		default:
 			// got a value but nested key expected, return "nil" for not found
 			return nil
@@ -340,6 +375,7 @@ func deepSearch(v interface{}, p interface{}, pk interface{}, paths []string) in
 					l := idx[0] + 1
 					m = makeSlice(len(idx), l, l)
 					x[ak] = m
+					return deepSearch(m, x, idx[0], paths)
 				} else {
 					if idx[0] < len(a) {
 						// m = make(map[string]interface{})
@@ -355,7 +391,6 @@ func deepSearch(v interface{}, p interface{}, pk interface{}, paths []string) in
 					}
 				}
 			}
-			return deepSearch(m, x, ak, paths)
 		}
 	case []interface{}:
 		switch pkx := pk.(type) {
