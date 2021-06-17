@@ -628,14 +628,51 @@ func getIndexPath(v reflect.Value, selector string) (reflect.Value, bool) {
 
 func Set(v interface{}, selector string, val interface{}, opts ...SetOptFunc) error {
 	var (
-		m, ok = v.(map[string]interface{})
-		paths = strings.Split(selector, ".")
+		vv, ok = v.(*map[string]interface{})
+		paths  = strings.Split(selector, ".")
 	)
 	if !ok {
 		return errors.New("invalid map type")
 	}
+
+	m := *vv
 	// mv := deepSearch(m, paths[:len(paths)-1])
 	// lastKey := strings.ToLower(paths[len(paths)-1])
+	lastKey := paths[len(paths)-1]
+	_, idx, lastSlice := isIndex(lastKey)
+	if !lastSlice {
+		paths = paths[:len(paths)-1]
+	}
+	mv := deepSearch(m, nil, nil, paths)
+
+	switch x := mv.(type) {
+	case map[string]interface{}:
+		// mv.(map[string]interface{})[lastKey] = val
+		x[lastKey] = val
+	case []interface{}:
+		if lastSlice {
+			x[idx[0]] = val
+		} else {
+			_, idx, _ = isIndex(paths[len(paths)-1])
+			mv, ok := x[idx[0]].(map[string]interface{})
+			if !ok {
+				mv = make(map[string]interface{})
+				x[idx[0]] = mv
+			}
+			mv[lastKey] = val
+		}
+	}
+	v = &m
+	// mv[lastKey] = val
+
+	return nil
+}
+
+func Set2(m map[string]interface{}, selector string, val interface{}) error {
+	var (
+		paths = strings.Split(selector, ".")
+	)
+
 	lastKey := paths[len(paths)-1]
 	_, idx, lastSlice := isIndex(lastKey)
 	if !lastSlice {
@@ -659,7 +696,6 @@ func Set(v interface{}, selector string, val interface{}, opts ...SetOptFunc) er
 			mv[lastKey] = val
 		}
 	}
-	// mv[lastKey] = val
 
 	return nil
 }

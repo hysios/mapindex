@@ -358,20 +358,35 @@ func Test_setIndexPathEmpty(t *testing.T) {
 
 func Test_Set(t *testing.T) {
 	var m = map[string]interface{}{}
-	Set(m, "a.b.c", true)
-	print(t, m)
+	Set(&m, "a.b.c", true)
+	assert.Equal(t, searchMap(m, []string{"a", "b", "c"}), true)
 
-	Set(m, "a.b", true)
-	print(t, m)
+	Set(&m, "a.b", true)
+	assert.Equal(t, searchMap(m, []string{"a", "b"}), true)
+
+	// print(t, m)
 
 	Set(m, "a.e[1]", 123)
-	print(t, m)
+	assert.Equal(t, searchMap(m, []string{"a", "e[1]"}), 123)
+	// print(t, m)
 
 	Set(m, "a.e[3]", false)
-	print(t, m)
+	assert.Equal(t, searchMap(m, []string{"a", "e[3]"}), false)
+	// print(t, m)
 
 	Set(m, "a.e[4].c", true)
-	print(t, m)
+	assert.Equal(t, searchMap(m, []string{"a", "e[4].c"}), true)
+
+	var v = struct {
+		m map[string]interface{}
+	}{
+		m: make(map[string]interface{}),
+	}
+
+	Set(&v.m, "a.b.c", true)
+	assert.Equal(t, searchMap(v.m, []string{"a", "a.b.c"}), true)
+
+	// print(t, m)
 }
 
 func Test_deepSearch(t *testing.T) {
