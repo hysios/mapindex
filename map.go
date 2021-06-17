@@ -635,7 +635,8 @@ func Set(v interface{}, selector string, val interface{}, opts ...SetOptFunc) er
 		return errors.New("invalid map type")
 	}
 	// mv := deepSearch(m, paths[:len(paths)-1])
-	lastKey := strings.ToLower(paths[len(paths)-1])
+	// lastKey := strings.ToLower(paths[len(paths)-1])
+	lastKey := paths[len(paths)-1]
 	_, idx, lastSlice := isIndex(lastKey)
 	if !lastSlice {
 		paths = paths[:len(paths)-1]
