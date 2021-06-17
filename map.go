@@ -262,19 +262,27 @@ func searchMap(source map[string]interface{}, path []string) interface{} {
 			)
 			for i, idx := range idxs {
 				if i < l {
-					nx, ok := x[idx].([]interface{})
-					if !ok {
+					if idx < len(x) {
+						nx, ok := x[idx].([]interface{})
+						if !ok {
+							return nil
+						}
+						x = nx
+					} else {
 						return nil
 					}
-					x = nx
 				} else {
-					m, ok = x[idx].(map[string]interface{})
-					if !ok {
-						if len(path) > 1 {
-							return nil
-						} else {
-							return x[idx]
+					if idx < len(x) {
+						m, ok = x[idx].(map[string]interface{})
+						if !ok {
+							if len(path) > 1 {
+								return nil
+							} else {
+								return x[idx]
+							}
 						}
+					} else {
+						return nil
 					}
 				}
 			}
@@ -364,15 +372,16 @@ func deepSearch(v interface{}, p interface{}, pk interface{}, paths []string) in
 			}
 			return deepSearch(m, x, k, paths)
 		} else {
-			m, ok := x[ak]
+			a, ok := x[ak].([]interface{})
 			if !ok {
 				var (
 					ll     = len(idxs) - 1
 					i, idx int
-					a      []interface{}
 					pidx   int
 					p      interface{}
 				)
+				a = make([]interface{}, idx+1)
+				x[ak] = a
 				// m = makeSlice(len(idxs), l, l)
 
 				// x[ak] = m
@@ -399,71 +408,66 @@ func deepSearch(v interface{}, p interface{}, pk interface{}, paths []string) in
 				}
 				return deepSearch(a, p, idx, paths)
 			} else {
-				if a, ok := m.([]interface{}); !ok {
-					l := idxs[0] + 1
-					m = makeSlice(len(idxs), l, l)
-					x[ak] = m
-					return deepSearch(m, x, idxs[0], paths)
-				} else {
-					var (
-						i, idx int
-						ll     = len(idxs) - 1
-						pa     = a
-						pidx   int
-					)
 
-					for i, idx = range idxs {
-						if i < ll {
-							if idx < len(a) {
-								ca, ok := a[idx].([]interface{})
-								if !ok {
-									ca = make([]interface{}, idx+1)
-									a[idx] = ca
-								}
-								pidx = idx
-								pa = a
-								a = ca
+				var (
+					i, idx int
+					ll     = len(idxs) - 1
+					pa     = a
+					pidx   int
+				)
 
-								// m = make(map[string]interface{})
-								// a[idx[0]] = m
-								// x[ak] = a
-								// return deepSearch(m, x, idx, paths)
-							} else {
-								l := idx + 1
-								ca := make([]interface{}, l)
-								copy(ca, a)
-								if i == 0 {
-									x[ak] = ca
-								} else {
-									a[idx] = ca
-								}
-								pidx = idx
-								pa = a
-								a = ca
-								// m = makeSlice(len(idxs), l, l)
-								// copy(m.([]interface{}), a)
-								// x[ak] = m
-								// return deepSearch(m, x, idx, paths)
+				for i, idx = range idxs {
+					if i < ll {
+						if idx < len(a) {
+							ca, ok := a[idx].([]interface{})
+							if !ok {
+								ca = make([]interface{}, idx+1)
+								a[idx] = ca
 							}
+							pidx = idx
+							pa = a
+							a = ca
+
+							// m = make(map[string]interface{})
+							// a[idx[0]] = m
+							// x[ak] = a
+							// return deepSearch(m, x, idx, paths)
 						} else {
-							if idx >= len(a) {
-								l := idx + 1
-								ca := make([]interface{}, l)
-								copy(ca, a)
-								if i == 0 {
-									x[ak] = ca
-								} else {
-									pa[pidx] = ca
-									// a[idx] = ca
-								}
-								pa = a
-								a = ca
+							l := idx + 1
+							ca := make([]interface{}, l)
+							copy(ca, a)
+							if i == 0 {
+								x[ak] = ca
+							} else {
+								a[idx] = ca
 							}
+							pidx = idx
+							pa = a
+							a = ca
+							// m = makeSlice(len(idxs), l, l)
+							// copy(m.([]interface{}), a)
+							// x[ak] = m
+							// return deepSearch(m, x, idx, paths)
+						}
+					} else {
+						if idx >= len(a) {
+							l := idx + 1
+							ca := make([]interface{}, l)
+							copy(ca, a)
+							if i == 0 {
+								x[ak] = ca
+							} else {
+								pa[pidx] = ca
+								// a[idx] = ca
+							}
+							pa = a
+							a = ca
 						}
 					}
-
-					return deepSearch(a, pa, idx, paths)
 				}
+
+				return deepSearch(a, pa, idx, paths)
+
 			}
 		}
 	case []interface{}:
@@ -660,13 +664,22 @@ func Set(v interface{}, selector string, val interface{}, opts ...SetOptFunc) er
 }
 
 func Get(m interface{}, selector string) interface{} {
-	v := reflect.ValueOf(m)
-	if val, ok := getIndexPath(v, selector); ok {
-		if val.IsValid() {
-			return val.Interface()
-		} else {
-			return nil
-		}
+	// v := reflect.ValueOf(m)
+	paths := strings.Split(selector, ".")
+	switch x := m.(type) {
+	case map[string]interface{}:
+		return searchMap(x, paths)
+	case *map[string]interface{}:
+		return searchMap(*x, paths)
+	default:
+		return nil
 	}
-	return nil
+	// if val, ok := getIndexPath(v, selector); ok {
+	// 	if val.IsValid() {
+	// 		return val.Interface()
+	// 	} else {
+	// 		return nil
+	// 	}
+	// }
+	// return nil
 }

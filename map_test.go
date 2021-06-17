@@ -302,7 +302,7 @@ func TestGet(t *testing.T) {
 		{
 			args: args{
 				m:        m,
-				selector: "company.locations.0.name",
+				selector: "company.locations[0].name",
 			},
 			want: "headquarter",
 		},
@@ -310,7 +310,7 @@ func TestGet(t *testing.T) {
 		{
 			args: args{
 				m:        m,
-				selector: "company.locations.1.name",
+				selector: "company.locations[1].name",
 			},
 			want: "subpart",
 		},
@@ -318,14 +318,14 @@ func TestGet(t *testing.T) {
 		{
 			args: args{
 				m:        m,
-				selector: "company.locations.1.default",
+				selector: "company.locations[1].default",
 			},
 			want: false,
 		},
 		{
 			args: args{
 				m:        m,
-				selector: "company.locations.3.default",
+				selector: "company.locations[3].default",
 			},
 			want: nil,
 		},
@@ -460,11 +460,26 @@ func Test_deepSearch(t *testing.T) {
 	if v, ok := c.([]interface{}); ok {
 		v[4] = 123
 	}
+	t.Log(m)
 	assert.Equal(t, searchMap(m, []string{"h", "g", "d", "e", "c[1][2][4]"}), 123)
-
 	print(t, m)
-	// t.Log(m)
 
+	c = deepSearch(m, nil, nil, []string{"h", "g", "d[1][2][3]", "e", "c[5]"})
+	if v, ok := c.([]interface{}); ok {
+		v[5] = 111
+	}
+
+	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"h", "g", "d[1][2][3]", "e", "c[5]"}), 111)
+
+	c = deepSearch(m, nil, nil, []string{"h", "g", "d[1][2][3]", "e"})
+	if v, ok := c.(map[string]interface{}); ok {
+		v["f"] = 222
+	}
+	t.Log(m)
+	assert.Equal(t, searchMap(m, []string{"h", "g", "d[1][2][3]", "e", "f"}), 222)
+	// print(t, m)
+	// t.Log(m)
 	// print(t, m)
 }
 
